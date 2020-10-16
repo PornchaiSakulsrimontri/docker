@@ -1,0 +1,32 @@
+https://download.oracle.com/otn/java/jdk/
+8u261-b12
+/
+a4634525489241b9a9e1aa73d9e118e6
+/jre-8u261-linux-x64.tar.gz?AuthParam=1602685461_35f9f8492c5bb367ef8e98fecaf98438
+
+--2020-10-14 15:18:30--  https://download.oracle.com/otn-pub/java/jce/8/jce_policy-8.zip?AuthParam=1602688830_4046406fe829f69908f64cf20784eeb7
+Connecting to download.oracle.com (download.oracle.com)|171.102.12.41|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 12417 (12K) [application/zip]
+Saving to: 'jce_policy-8.zip'
+
+     0K .......... ..                                         100% 10.8M=0.001s
+
+2020-10-14 15:18:31 (10.8 MB/s) - 'jce_policy-8.zip' saved [12417/12417]
+
+Archive:  jce_policy-8.zip
+  inflating: /usr/lib/jvm/default-jvm/jre/lib/security/US_export_policy.jar  
+  inflating: /usr/lib/jvm/default-jvm/jre/lib/security/local_policy.jar  
+  inflating: /usr/lib/jvm/default-jvm/jre/lib/security/README.txt  
+WARNING: Ignoring APKINDEX.2c4ac24e.tar.gz: No such file or directory
+WARNING: Ignoring APKINDEX.40a3604f.tar.gz: No such file or directory
+(1/6) Purging build-dependencies (20201014.151814)
+(2/6) Purging wget (1.20.3-r1)
+(3/6) Purging ca-certificates (20191127-r4)
+Executing ca-certificates-20191127-r4.post-deinstall
+(4/6) Purging unzip (6.0-r8)
+(5/6) Purging libidn2 (2.3.0-r0)
+(6/6) Purging libunistring (0.9.10-r0)
+Executing busybox-1.31.1-r16.trigger
+Executing glibc-bin-2.32-r0.trigger
+/usr/glibc-compat/sbin/ldconfig: /usr/glibc-compat/lib/ld-linux-x86-64.so.2 is not a symbolic link
