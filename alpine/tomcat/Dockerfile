@@ -1,132 +1,70 @@
-FROM lvshennan/alpine-oraclejre8_261_b12
+FROM alpine:3.12
 
-ENV CATALINA_HOME /usr/local/tomcat
-ENV PATH $CATALINA_HOME/bin:$PATH
+RUN { echo '#!/bin/sh'; echo 'set -e'; echo; echo 'dirname "$(dirname "$(readlink -f "$(which javac || which java)")")"';} > /usr/local/bin/docker-java-home && chmod +x /usr/local/bin/docker-java-home
+
+ENV JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk/jre
+
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-1.8-openjdk/jre/bin:/usr/lib/jvm/java-1.8-openjdk/bin
+
+ENV JAVA_VERSION=8u252
+
+ENV JAVA_ALPINE_VERSION=8.252.09-r0
+
+RUN apk add --no-cache openjdk8-jre
+
+ENV CATALINA_HOME=/usr/local/tomcat
+
+ENV PATH=/usr/local/tomcat/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/jvm/java-1.8-openjdk/jre/bin:/usr/lib/jvm/java-1.8-openjdk/bin
+
 RUN mkdir -p "$CATALINA_HOME"
-WORKDIR $CATALINA_HOME
 
-# let "Tomcat Native" live somewhere isolated
-ENV TOMCAT_NATIVE_LIBDIR $CATALINA_HOME/native-jni-lib
-ENV LD_LIBRARY_PATH ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR
+WORKDIR /usr/local/tomcat
 
-# see https://www.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/KEYS
-# see also "update.sh" (https://github.com/docker-library/tomcat/blob/master/update.sh)
-ENV GPG_KEYS 05AB33110949707C93A279E3D3EFE6B686867BA6 07E48665A34DCAFAE522E5E6266191C37C037D42 47309207D818FFD8DCD3F83F1931D684307A10A5 541FBE7D8F78B25E055DDEE13C370389288584E7 61B832AC2F1C5A90F0F9B00A1C506407564C17A3 713DA88BE50911535FE716F5208B0AB1D63011C7 79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED 9BA44C2621385CB966EBA586F72C284D731FABEE A27677289986DB50844682F8ACB77FC2E86E29AC A9C5DF4D22E99998D9875A5110C01C5A2F6059E7 DCFD35E0BF8CA7344752DE8B6FB21E8933C60243 F3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE F7DA48BB64BCB84ECBA7EE6935CD23C10D498E23
+ENV TOMCAT_NATIVE_LIBDIR=/usr/local/tomcat/native-jni-lib
 
-ENV TOMCAT_MAJOR 8
-ENV TOMCAT_VERSION 8.5.59
-ENV TOMCAT_SHA512 3106fa39f1859ba31c87d245eaf8efe9c1f2f4837dc4f259c245d2c9b55d3593e97a9925e7d012d397987279965b8e24d940cfdda062d8ac9b64e41396120bd9
+ENV LD_LIBRARY_PATH=/usr/local/tomcat/native-jni-lib
 
-RUN set -eux; \
-	\
-	apk update; \
-	apk add \
-		gnupg dirmngr \
-		wget ca-certificates \
-	; \
-	\
-	ddist() { \
-		local f="$1"; shift; \
-		local distFile="$1"; shift; \
-		local mvnFile="${1:-}"; \
-		local success=; \
-		local distUrl=; \
-		for distUrl in \
-# https://issues.apache.org/jira/browse/INFRA-8753?focusedCommentId=14735394#comment-14735394
-			"https://www.apache.org/dyn/closer.cgi?action=download&filename=$distFile" \
-# if the version is outdated (or we're grabbing the .asc file), we might have to pull from the dist/archive :/
-			"https://www-us.apache.org/dist/$distFile" \
-			"https://www.apache.org/dist/$distFile" \
-			"https://archive.apache.org/dist/$distFile" \
-# if all else fails, let's try Maven (https://www.mail-archive.com/users@tomcat.apache.org/msg134940.html; https://mvnrepository.com/artifact/org.apache.tomcat/tomcat; https://repo1.maven.org/maven2/org/apache/tomcat/tomcat/)
-			${mvnFile:+"https://repo1.maven.org/maven2/org/apache/tomcat/tomcat/$mvnFile"} \
-		; do \
-			if wget -O "$f" "$distUrl" && [ -s "$f" ]; then \
-				success=1; \
-				break; \
-			fi; \
-		done; \
-		[ -n "$success" ]; \
-	}; \
-	\
-	ddist 'tomcat.tar.gz' "tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz" "$TOMCAT_VERSION/tomcat-$TOMCAT_VERSION.tar.gz"; \
-	echo "$TOMCAT_SHA512 *tomcat.tar.gz" | sha512sum --strict --check -; \
-	ddist 'tomcat.tar.gz.asc' "tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz.asc" "$TOMCAT_VERSION/tomcat-$TOMCAT_VERSION.tar.gz.asc"; \
-	export GNUPGHOME="$(mktemp -d)"; \
-	for key in $GPG_KEYS; do \
-		gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys "$key"; \
-	done; \
-	gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz; \
-	tar -xf tomcat.tar.gz --strip-components=1; \
-	rm bin/*.bat; \
-	rm tomcat.tar.gz*; \
-	command -v gpgconf && gpgconf --kill all || :; \
-	rm -rf "$GNUPGHOME"; \
-	\
-# https://tomcat.apache.org/tomcat-9.0-doc/security-howto.html#Default_web_applications
-	mv webapps webapps.dist; \
-	mkdir webapps; \
-# we don't delete them completely because they're frankly a pain to get back for users who do want them, and they're generally tiny (~7MB)
-	\
-	nativeBuildDir="$(mktemp -d)"; \
-	tar -xf bin/tomcat-native.tar.gz -C "$nativeBuildDir" --strip-components=1; \
-	apk add \
-		dirmngr \
-		dpkg-dev \
-		gcc \
-		libapr1-dev \
-		libssl-dev \
-		make \
-	; \
-	( \
-		export CATALINA_HOME="$PWD"; \
-		cd "$nativeBuildDir/native"; \
-		gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
-		aprConfig="$(command -v apr-1-config)"; \
-		./configure \
-			--build="$gnuArch" \
-			--libdir="$TOMCAT_NATIVE_LIBDIR" \
-			--prefix="$CATALINA_HOME" \
-			--with-apr="$aprConfig" \
-			--with-java-home="$JAVA_HOME" \
-			--with-ssl=yes; \
-		make -j "$(nproc)"; \
-		make install; \
-	); \
-	rm -rf "$nativeBuildDir"; \
-	rm bin/tomcat-native.tar.gz; \
-	\
-# reset apt-mark's "manual" list so that "purge --auto-remove" will remove all build dependencies
-	apt-mark auto '.*' > /dev/null; \
-	find "$TOMCAT_NATIVE_LIBDIR" -type f -executable -exec ldd '{}' ';' \
-		| awk '/=>/ { print $(NF-1) }' \
-		| sort -u \
-		| xargs -r dpkg-query --search \
-		| cut -d: -f1 \
-		| sort -u \
-		| xargs -r apt-mark manual \
-	; \
-	apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
-	rm -rf /var/lib/apt/lists/*; \
-	\
-# sh removes env vars it doesn't support (ones with periods)
-# https://github.com/docker-library/tomcat/issues/77
-	find ./bin/ -name '*.sh' -exec sed -ri 's|^#!/bin/sh$|#!/usr/bin/env bash|' '{}' +; \
-	\
-# fix permissions (especially for running as non-root)
-# https://github.com/docker-library/tomcat/issues/35
-	chmod -R +rX .; \
-	chmod 777 logs temp work
+ENV GPG_KEYS=A9C5DF4D22E99998D9875A5110C01C5A2F6059E7
 
-# verify Tomcat Native is working properly
-RUN set -e \
-	&& nativeLines="$(catalina.sh configtest 2>&1)" \
-	&& nativeLines="$(echo "$nativeLines" | grep 'Apache Tomcat Native')" \
-	&& nativeLines="$(echo "$nativeLines" | sort -u)" \
-	&& if ! echo "$nativeLines" | grep -E 'INFO: Loaded( APR based)? Apache Tomcat Native library' >&2; then \
-		echo >&2 "$nativeLines"; \
-		exit 1; \
-	fi
+ENV TOMCAT_MAJOR=8
+
+ENV TOMCAT_VERSION=8.5.59
+
+ENV TOMCAT_SHA512=3106fa39f1859ba31c87d245eaf8efe9c1f2f4837dc4f259c245d2c9b55d3593e97a9925e7d012d397987279965b8e24d940cfdda062d8ac9b64e41396120bd9
+
+ENV TOMCAT_TGZ_URLS=https://www.apache.org/dyn/closer.cgi?action=download&filename=tomcat/tomcat-8/v8.5.59/bin/apache-tomcat-8.5.59.tar.gz
+
+ENV TOMCAT_ASC_URLS=https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.59/bin/apache-tomcat-8.5.59.tar.gz.asc
+
+ENV DOCKER_JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk
+
+RUN set -eux; apk add --no-cache --virtual .fetch-deps gnupg ca-certificates openssl ; \
+    export GNUPGHOME="$(mktemp -d)"; \
+    for key in $GPG_KEYS; do gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys "$key"; done; success=; \
+    for url in $TOMCAT_TGZ_URLS; do if wget -O tomcat.tar.gz "$url"; then success=1; break; fi; done; 	[ -n "$success" ]; \
+    echo "$TOMCAT_SHA512 *tomcat.tar.gz" | sha512sum -c -; success=; \
+    for url in $TOMCAT_ASC_URLS; do if wget -O tomcat.tar.gz.asc "$url"; then success=1; break; fi; done; [ -n "$success" ]; \
+    gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz; 	tar -xvf tomcat.tar.gz --strip-components=1; \
+    rm bin/*.bat; \
+    rm tomcat.tar.gz*; 	command -v gpgconf && gpgconf --kill all || :; 	rm -rf "$GNUPGHOME"; \
+    nativeBuildDir="$(mktemp -d)"; 	tar -xvf bin/tomcat-native.tar.gz -C "$nativeBuildDir" --strip-components=1; \
+    apk add --no-cache --virtual .native-build-deps apr-dev coreutils dpkg-dev dpkg gcc libc-dev make "openjdk${JAVA_VERSION%%[-~bu]*}"="$JAVA_ALPINE_VERSION" openssl-dev ; \
+    ( export CATALINA_HOME="$PWD"; cd "$nativeBuildDir/native"; gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; ./configure --build="$gnuArch" --libdir="$TOMCAT_NATIVE_LIBDIR" --prefix="$CATALINA_HOME" --with-apr="$(which apr-1-config)" --with-java-home="$(docker-java-home)" --with-ssl=yes; \
+    make -j "$(nproc)"; make install; ); \
+    rm -rf "$nativeBuildDir"; rm bin/tomcat-native.tar.gz; runDeps="$( scanelf --needed --nobanner --format '%n#p' --recursive "$TOMCAT_NATIVE_LIBDIR" | tr ',' '\n' | sort -u | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' 	)"; \
+    apk add --virtual .tomcat-native-rundeps $runDeps; 	apk del .fetch-deps .native-build-deps; \
+    apk add --no-cache bash; \
+    find ./bin/ -name '*.sh' -exec sed -ri 's|^#!/bin/sh$|#!/usr/bin/env bash|' '{}' +; chmod -R +rX .; chmod 777 logs work
+
+RUN set -e && \
+    nativeLines="$(catalina.sh configtest 2>&1)" && \
+    nativeLines="$(echo "$nativeLines" | grep 'Apache Tomcat Native')" && \
+    nativeLines="$(echo "$nativeLines" | sort -u)" && \
+    if ! echo "$nativeLines" | grep 'INFO: Loaded Apache Tomcat Native library' >&2; \
+        then echo >&2 "$nativeLines"; \
+        exit 1; \
+    fi
 
 EXPOSE 8080
+
 CMD ["catalina.sh", "run"]
